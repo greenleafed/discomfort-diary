@@ -108,13 +108,15 @@
             }
 
             // [핵심 부분] map 함수 안에서 삭제 버튼(<button class="delete-btn">)을 추가합니다.
-            list.innerHTML = notes.map(note => `
-                <div class="note-item">
-                    <div class="time">${note.date}</div>
-                    <div class="text">${note.content.replace(/\n/g, '<br>')}</div>
-                    <button class="delete-btn" onclick="deleteNote(${note.id})">&times;</button>
-                </div>
-            `).join('');
+            list.innerHTML = notes
+    .filter(note => note.content && note.content.trim() !== "") // 내용이 있는 것만 골라내기
+    .map(note => `
+        <div class="note-item">
+            <div class="time">${note.date}</div>
+            <div class="text">${note.content.replace(/\n/g, '<br>')}</div>
+            <button class="delete-btn" onclick="deleteNote(${note.id})">&times;</button>
+        </div>
+    `).join('');
         } catch (e) {
             console.error(e);
             list.innerHTML = '<p style="text-align:center; color:red;">데이터를 가져오지 못했습니다.</p>';
