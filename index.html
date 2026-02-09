@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>불편일기 - 클라우드 동기화</title>
+    <style>
+        :root { --bg: #f8f9fa; --primary: #343a40; --secondary: #6c757d; --card: #ffffff; --danger: #ffadad; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--primary); }
+        .container { max-width: 500px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; letter-spacing: -1px; text-align: center; }
+        
+        #noteInput { 
+            width: 100%; border: 2px solid #ddd; border-radius: 12px; padding: 15px;
+            font-size: 16px; box-sizing: border-box; outline: none; transition: border 0.3s; resize: none;
+        }
+        #noteInput:focus { border-color: var(--primary); }
+        #noteInput:disabled { background: #eee; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button { border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+        .btn-main { flex: 3; background: var(--primary); color: white; padding: 15px; }
+        .btn-sub { flex: 1; background: var(--secondary); color: white; padding: 15px; font-size: 0.8rem; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #diaryList { margin-top: 30px; }
+        .note-item { 
+            position: relative; background: var(--card); padding: 15px; border-radius: 12px; 
+            margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+        }
+        .time { font-size: 0.75rem; color: #888; margin-bottom: 5px; }
+        .text { line-height: 1.5; padding-right: 10px; word-break: break-all; }
+        .loading-spinner { text-align: center; color: var(--secondary); margin-top: 20px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📝 불편일기</h1>
+    <textarea id="noteInput" rows="4" placeholder="지금 어떤 점이 불편한가요? (저장 시 1~2초 정도 소요됩니다)"></textarea>
+    <div class="btn-group">
+        <button id="saveBtn" class="btn-main" onclick="saveNote()">불편 기록하기</button>
+        <button class="btn-sub" onclick="exportData()">백업(JSON)</button>
+    </div>
+    <div id="diaryList"></div>
+</div>
+
+<script>
+    // 본인의 API URL
+    const API_URL = "https://script.google.com/macros/s/AKfycbysFhu0i3QZIvqQWYRfSSwK_53xZ_mjST1HJ5CADNwf81gNE5OoaaJRXMSKYVlZUXU/exec";
+
+    window.onload = () => displayNotes();
+
+    // 1. 데이터 저장 (POST)
+    async function saveNote() {
+        const input = document.getElementById('noteInput');
+        const btn = document.getElementById('saveBtn');
+        if (!input.value.trim()) return;
+
+        const newNote = {
+            id: Date.now(),
+            content: input.value,
+            date: new Date().toLocaleString()
+        };
+
+        input.disabled = true;
+        btn.disabled = true;
+        btn.innerText = "동기화 중...";
+
+        try {
+            // 구글 시트로 데이터 전송
+            await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify(newNote)
+            });
+            input.value = '';
+        } catch (e) {
+            console.error(e);
+            alert("저장에 실패했습니다. 설정을 확인해주세요.");
+        } finally {
+            input.disabled = false;
+            btn.disabled = false;
+            btn.innerText = "불편 기록하기";
+            displayNotes(); // 전송 후 목록 새로고침
+        }
+    }
+
+    // 2. 데이터 불러오기 (GET)
+    async function displayNotes() {
+        const list = document.getElementById('diaryList');
+        list.innerHTML = '<div class="loading-spinner">구글 시트에서 불러오는 중...</div>';
+
+        try {
+            const response = await fetch(API_URL);
+            const notes = await response.json();
+            
+            notes.sort((a, b) => b.id - a.id); // 최신순
+
+            if (notes.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:#888; margin-top:40px;">기록이 없습니다.</p>';
+                return;
+            }
+
+            list.innerHTML = notes.map(note => `
+                <div class="note-item">
+                    <div class="time">${note.date}</div>
+                    <div class="text">${note.content.replace(/\n/g, '<br>')}</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error(e);
+            list.innerHTML = '<p style="text-align:center; color:red;">데이터를 가져오지 못했습니다.</p>';
+        }
+    }
+
+    // 3. 백업용 파일 다운로드
+    async function exportData() {
+        try {
+            const response = await fetch(API_URL);
+            const notes = await response.json();
+            const blob = new Blob([JSON.stringify(notes)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `불편일기_통합백업_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        } catch (e) {
+            alert("백업 데이터를 가져오지 못했습니다.");
+        }
+    }
+</script>
+
+</body>
+</html>
