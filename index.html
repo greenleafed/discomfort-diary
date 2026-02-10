@@ -72,12 +72,16 @@
         btn.innerText = "동기화 중...";
 
         try {
-            // 구글 시트로 데이터 전송
+            // 구글 시트로 데이터 전송 (no-cors: 302 리다이렉트 CORS 문제 우회)
             await fetch(API_URL, {
                 method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(newNote)
             });
             input.value = '';
+            // 시트 반영 대기 후 목록 새로고침
+            await new Promise(r => setTimeout(r, 1000));
         } catch (e) {
             console.error(e);
             alert("저장에 실패했습니다. 설정을 확인해주세요.");
@@ -85,7 +89,7 @@
             input.disabled = false;
             btn.disabled = false;
             btn.innerText = "불편 기록하기";
-            displayNotes(); // 전송 후 목록 새로고침
+            displayNotes();
         }
     }
 
@@ -96,8 +100,15 @@
 
         try {
             const response = await fetch(API_URL);
-            const notes = await response.json();
-            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            let notes;
+            try {
+                notes = await response.json();
+            } catch (parseErr) {
+                throw new Error('JSON 파싱 실패: ' + parseErr.message);
+            }
+
             // 최신순 정렬 (ID 기준)
             notes.sort((a, b) => b.id - a.id);
 
@@ -106,9 +117,8 @@
                 return;
             }
 
-            // [핵심 부분] map 함수 안에서 삭제 버튼(<button class="delete-btn">)을 추가합니다.
             list.innerHTML = notes
-    .filter(note => note.content && note.content.trim() !== "") // 내용이 있는 것만 골라내기
+    .filter(note => note.content && note.content.trim() !== "")
     .map(note => `
         <div class="note-item">
             <div class="time">${note.date}</div>
@@ -121,18 +131,22 @@
             list.innerHTML = '<p style="text-align:center; color:red;">데이터를 가져오지 못했습니다.</p>';
         }
     }
-// 삭제 기능 추가 (구글 시트와 통신)
+// 삭제 기능 (GET 방식 - POST CORS 문제 우회)
     async function deleteNote(id) {
         if (!confirm("이 불편 기록을 정말 삭제할까요?")) return;
 
+        const btns = document.querySelectorAll('.delete-btn');
+        btns.forEach(b => { b.disabled = true; b.style.opacity = '0.3'; });
+
         try {
-            await fetch(API_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: "delete", id: id })
-            });
-            displayNotes(); // 삭제 후 목록 갱신
+            const response = await fetch(API_URL + "?action=delete&id=" + id);
+            const result = await response.json();
+            console.log("삭제 결과:", result);
+            displayNotes();
         } catch (e) {
+            console.error("삭제 실패:", e);
             alert("삭제에 실패했습니다.");
+            btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
         }
     }
 
